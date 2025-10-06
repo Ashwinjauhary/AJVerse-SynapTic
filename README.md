@@ -138,10 +138,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 If you have any questions or need help:
 - Open an issue on GitHub
-- Contact: [your-email@example.com]
 
 ---
 
-**Made with ❤️ by AJVerse** 🚀
+**Made by AJVerse** 🚀
 
 *The AI can't be beaten... but you'll love trying!*
