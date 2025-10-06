@@ -15,6 +15,9 @@ function TicTacToe() {
     return JSON.parse(localStorage.getItem('scores')) || { X: 0, O: 0 };
   });
   const [gameMode, setGameMode] = useState('player');
+  const [difficulty, setDifficulty] = useState(() => {
+    return localStorage.getItem('difficulty') || 'medium';
+  });
   const [winningLine, setWinningLine] = useState([]);
   const [showConfetti, setShowConfetti] = useState(false);
   const [history, setHistory] = useState(() => {
@@ -41,7 +44,8 @@ function TicTacToe() {
     localStorage.setItem('scores', JSON.stringify(scores));
     localStorage.setItem('history', JSON.stringify(history));
     localStorage.setItem('step', JSON.stringify(step));
-  }, [board, xIsNext, scores, history, step]);
+    localStorage.setItem('difficulty', difficulty);
+  }, [board, xIsNext, scores, history, step, difficulty]);
 
   useEffect(() => {
     const handleResize = () => {
@@ -77,42 +81,96 @@ function TicTacToe() {
     }
   }, [winner]);
 
+  const minimax = useCallback((squares, depth, isMaximizing) => {
+    const aiPlayer = 'O';
+    const humanPlayer = 'X';
+    const result = calculateWinner(squares);
+    if (result?.winner === aiPlayer) return 10 - depth;
+    if (result?.winner === humanPlayer) return depth - 10;
+    if (squares.every(square => square !== null)) return 0;
+
+    if (isMaximizing) {
+      let bestScore = -Infinity;
+      for (let i = 0; i < squares.length; i++) {
+        if (squares[i] === null) {
+          squares[i] = aiPlayer;
+          const score = minimax(squares, depth + 1, false);
+          squares[i] = null;
+          bestScore = Math.max(bestScore, score);
+        }
+      }
+      return bestScore;
+    }
+
+    let bestScore = Infinity;
+    for (let i = 0; i < squares.length; i++) {
+      if (squares[i] === null) {
+        squares[i] = humanPlayer;
+        const score = minimax(squares, depth + 1, true);
+        squares[i] = null;
+        bestScore = Math.min(bestScore, score);
+      }
+    }
+    return bestScore;
+  }, []);
+
   const findBestMove = useCallback(() => {
     const aiPlayer = 'O';
     const humanPlayer = 'X';
+    const emptySquares = board
+      .map((value, index) => (value === null ? index : null))
+      .filter((value) => value !== null);
 
-    for (let i = 0; i < 9; i++) {
-      if (board[i] === null) {
-        const newBoard = [...board];
-        newBoard[i] = aiPlayer;
-        if (calculateWinner(newBoard)?.winner === aiPlayer) return i;
+    if (emptySquares.length === 0) return -1;
+
+    if (difficulty === 'easy') {
+      return emptySquares[Math.floor(Math.random() * emptySquares.length)];
+    }
+
+    if (difficulty === 'medium') {
+      for (let i = 0; i < 9; i++) {
+        if (board[i] === null) {
+          const newBoard = [...board];
+          newBoard[i] = aiPlayer;
+          if (calculateWinner(newBoard)?.winner === aiPlayer) return i;
+        }
+      }
+
+      for (let i = 0; i < 9; i++) {
+        if (board[i] === null) {
+          const newBoard = [...board];
+          newBoard[i] = humanPlayer;
+          if (calculateWinner(newBoard)?.winner === humanPlayer) return i;
+        }
+      }
+
+      if (board[4] === null) return 4;
+
+      const corners = [0, 2, 6, 8];
+      const availableCorners = corners.filter(i => board[i] === null);
+      if (availableCorners.length > 0) {
+        return availableCorners[Math.floor(Math.random() * availableCorners.length)];
+      }
+
+      return emptySquares[Math.floor(Math.random() * emptySquares.length)];
+    }
+
+    let bestScore = -Infinity;
+    let bestMove = -1;
+    const boardCopy = [...board];
+
+    for (const index of emptySquares) {
+      boardCopy[index] = aiPlayer;
+      const score = minimax(boardCopy, 0, false);
+      boardCopy[index] = null;
+      if (score > bestScore) {
+        bestScore = score;
+        bestMove = index;
       }
     }
 
-    for (let i = 0; i < 9; i++) {
-      if (board[i] === null) {
-        const newBoard = [...board];
-        newBoard[i] = humanPlayer;
-        if (calculateWinner(newBoard)?.winner === humanPlayer) return i;
-      }
-    }
-
-    if (board[4] === null) return 4;
-
-    const corners = [0, 2, 6, 8];
-    const availableCorners = corners.filter(i => board[i] === null);
-    if (availableCorners.length > 0) {
-      return availableCorners[Math.floor(Math.random() * availableCorners.length)];
-    }
-
-    const sides = [1, 3, 5, 7];
-    const availableSides = sides.filter(i => board[i] === null);
-    if (availableSides.length > 0) {
-      return availableSides[Math.floor(Math.random() * availableSides.length)];
-    }
-
-    return -1;
-  }, [board]);
+    return bestMove;
+  }, [board, difficulty, minimax]);
 
   const handleClick = useCallback((index) => {
     if (board[index] || winner || isGameOver) return;
@@ -155,6 +213,12 @@ function TicTacToe() {
 
   const toggleGameMode = () => {
     setGameMode(prev => (prev === 'player' ? 'ai' : 'player'));
+    resetGame();
+  };
+
+  const handleDifficultyChange = (level) => {
+    if (level === difficulty) return;
+    setDifficulty(level);
     resetGame();
   };
 
@@ -245,7 +309,7 @@ function TicTacToe() {
       <div className="game-info">
         <div className="status">{getStatusMessage()}</div>
         <div className="score-board">
-          <div className="score player-o">{gameMode === 'ai' ? 'AI' : 'Player O'}: {scores.O}</div>
+          <div className="score player-o">{gameMode === 'ai' ? `AI (${difficulty.charAt(0).toUpperCase() + difficulty.slice(1)})` : 'Player O'}: {scores.O}</div>
         </div>
       </div>
 
@@ -259,6 +323,22 @@ function TicTacToe() {
         <button className="control-btn reset-btn" onClick={resetGame}>New Game</button>
         <button className="control-btn mode-btn" onClick={toggleGameMode}>{gameMode === 'player' ? 'Play vs AI' : 'Play vs Player'}</button>
         <button className="control-btn score-btn" onClick={resetScores}>Reset Scores</button>
+        <div className="control-select-wrapper">
+          <span className="control-label">Difficulty</span>
+          <div className="difficulty-button-group">
+            {['easy', 'medium', 'impossible'].map(level => (
+              <button
+                key={level}
+                type="button"
+                className={`control-btn difficulty-btn ${difficulty === level ? 'active' : ''}`}
+                onClick={() => handleDifficultyChange(level)}
+                disabled={gameMode !== 'ai'}
+              >
+                {level.charAt(0).toUpperCase() + level.slice(1)}
+              </button>
+            ))}
+          </div>
+        </div>
         <button className="control-btn mode-btn" onClick={toggleHistory}>{showHistory ? 'Hide History' : 'Show History'}</button>
         <button className="control-btn mode-btn" onClick={toggleTheme}>{theme === 'light' ? 'Dark Mode' : 'Light Mode'}</button>
       </div>
